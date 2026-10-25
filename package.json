@@ -1,13 +1,13 @@
 {
-  "name": "bb-plugin-quick-review",
-  "version": "0.1.2",
+  "name": "bb-plugin-quick-reply",
+  "version": "0.2.0",
   "type": "module",
   "engines": {
     "bb": ">=0.46",
     "bbPluginSdk": ">=0.6.49"
   },
   "bb": {
-    "name": "Quick Review",
+    "name": "Quick Reply",
     "description": "Give your agent quick feedback by clicking on which lines you agree and disagree with. Ask for more detail on any line, or add a comment when a click isn't enough.",
     "branding": {
       "icon": "./assets/icon.svg"
@@ -41,11 +41,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mturilin/bb-plugin-quick-review.git"
+    "url": "git+https://github.com/mturilin/bb-plugin-quick-reply.git"
   },
-  "homepage": "https://github.com/mturilin/bb-plugin-quick-review#readme",
+  "homepage": "https://github.com/mturilin/bb-plugin-quick-reply#readme",
   "bugs": {
-    "url": "https://github.com/mturilin/bb-plugin-quick-review/issues"
+    "url": "https://github.com/mturilin/bb-plugin-quick-reply/issues"
   },
   "keywords": [
     "bb",

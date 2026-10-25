@@ -103,5 +103,5 @@ test("storage that throws does not break the store", () => {
   const store = createMarksStore(broken, () => 1);
   store.update("thr_a", line("A"), { vote: "up" });
   assert.equal(store.forThread("thr_a").length, 1);
-  assert.equal(STORAGE_KEY, "bb-quick-review:v1");
+  assert.equal(STORAGE_KEY, "bb-quick-reply:v1");
 });

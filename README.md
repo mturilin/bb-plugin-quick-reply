@@ -1,4 +1,4 @@
-# Quick Review for BB
+# Quick Reply for BB
 
 **Give your agent quick feedback by clicking on which lines you agree and disagree with.**
 
@@ -8,7 +8,7 @@ Copying quotes into the message box makes reviewing a long reply feel like
 work. Replying "looks good" saves typing, but leaves the agent guessing which
 details you actually approved.
 
-Quick Review puts the buttons on the reply. Hover a line, click agree,
+Quick Reply puts the buttons on the reply. Hover a line, click agree,
 disagree or "tell me more", move to the next one. Press **Submit replies**
 when you're done. Nothing to type unless you want to add a comment.
 
@@ -28,7 +28,7 @@ Disagreed.
 Please explain this in more detail.
 ```
 
-The agent is never told the plugin exists. Quick Review adds no skill,
+The agent is never told the plugin exists. Quick Reply adds no skill,
 command or tool to agent threads, and the message reads like one you wrote.
 
 ## Using it
@@ -87,10 +87,10 @@ is not affected.
 
 ## Install
 
-From BB's plugin store: search for **Quick Review**. Or from a terminal:
+From BB's plugin store: search for **Quick Reply**. Or from a terminal:
 
 ```
-bb plugin install git:https://github.com/mturilin/bb-plugin-quick-review.git
+bb plugin install git:https://github.com/mturilin/bb-plugin-quick-reply.git
 ```
 
 Requires BB 0.46 or later. Nothing else to install, no account, no external
@@ -104,7 +104,7 @@ npm install
 npm test            # unit tests (node --test, happy-dom)
 npm run typecheck
 bb plugin build
-bb plugin install . # once; afterwards: bb plugin reload quick-review
+bb plugin install . # once; afterwards: bb plugin reload quick-reply
 ```
 
 ## License

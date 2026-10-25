@@ -1,6 +1,6 @@
-// bb-plugin-quick-review — frontend entry.
+// bb-plugin-quick-reply — frontend entry.
 //
-// What: registers the two halves of Quick Review.
+// What: registers the two halves of Quick Reply.
 //   1. A content script (content.ts) that puts agree / disagree / tell-me-more /
 //      comment buttons on each line of agent replies.
 //   2. A bar above the thread's message box that counts the marks and sends

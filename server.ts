@@ -1,7 +1,7 @@
-// bb-plugin-quick-review — backend entry.
+// bb-plugin-quick-reply — backend entry.
 //
 // What: an intentionally empty backend.
-// Why: BB requires every plugin to declare `bb.server`, but Quick Review is a
+// Why: BB requires every plugin to declare `bb.server`, but Quick Reply is a
 //   pure UI layer. Marks live in the browser's localStorage and replies go
 //   out through the thread's own message box, so the server has nothing to do.
 // Design notes: no CLI command, agent tool, or skill is registered here on

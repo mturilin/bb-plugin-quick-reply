@@ -75,7 +75,7 @@ export interface MarksStore {
   reload(): void;
 }
 
-export const STORAGE_KEY = "bb-quick-review:v1";
+export const STORAGE_KEY = "bb-quick-reply:v1";
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const EMPTY: readonly LineMark[] = Object.freeze([]);
 
