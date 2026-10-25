@@ -1,0 +1,37 @@
+{
+  "name": "bb-plugin-line-review",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.46",
+    "bbPluginSdk": ">=0.6.49"
+  },
+  "bb": {
+    "name": "Line Review",
+    "description": "Thumbs up, thumbs down and comment on each line of an agent reply, then send your replies.",
+    "branding": {
+      "icon": "ThumbsUp"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx",
+    "skills": []
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.49",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "better-sqlite3": "^12.11.1",
+    "happy-dom": "^21.0.4",
+    "hono": "^4.13.14",
+    "sonner": "^1.7.4",
+    "typescript": "^5.7.0"
+  },
+  "description": "Thumbs up, thumbs down and comment on each line of an agent reply, then send your replies.",
+  "scripts": {
+    "test": "node --test lib/*.test.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "build": "bb plugin build"
+  }
+}
