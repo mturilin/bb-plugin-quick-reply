@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-quick-review",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "engines": {
     "bb": ">=0.46",
@@ -10,7 +10,7 @@
     "name": "Quick Review",
     "description": "Give your agent quick feedback by clicking on which lines you agree and disagree with. Ask for more detail on any line, or add a comment when a click isn't enough.",
     "branding": {
-      "icon": "ThumbsUp"
+      "icon": "./assets/icon.svg"
     },
     "server": "./server.ts",
     "app": "./app.tsx",
