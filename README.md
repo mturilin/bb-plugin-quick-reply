@@ -1,34 +1,53 @@
-# Line Review (bb-plugin-line-review)
+# Quick Review for BB
 
-A BB plugin for reviewing long agent replies line by line. Hover over any line
-of an agent's reply to get 👍, 👎 and 💬. When you're done, press **Submit
-replies** above the message box. The agent receives one ordinary message from
-you, with each line you marked quoted and your reaction under it:
+**Give your agent quick feedback by clicking on which lines you agree and disagree with.**
+
+![Hovering a line of an agent reply shows agree, disagree, tell-me-more and comment buttons](assets/screenshots/line-buttons.png)
+
+Copying quotes into the message box makes reviewing a long reply feel like
+work. Replying "looks good" saves typing, but leaves the agent guessing which
+details you actually approved.
+
+Quick Review puts the buttons on the reply. Hover a line, click agree,
+disagree or "tell me more", move to the next one. Press **Submit replies**
+when you're done. Nothing to type unless you want to add a comment.
+
+The agent gets one ordinary message from you, each line you clicked quoted
+with your verdict under it in plain words:
 
 ```
 My replies, line by line:
 
 > Use Postgres for the job queue
-👍
+Agreed.
 
 > Retry failed jobs 5 times with exponential backoff
-👎 3 retries is enough
+Disagreed.
+
+> Add a dead-letter queue
+Please explain this in more detail.
 ```
 
-The agent is never told the plugin exists. The plugin has no skill, CLI
-command or agent tool, and the message reads like something you typed.
+The agent is never told the plugin exists. Quick Review adds no skill,
+command or tool to agent threads, and the message reads like one you wrote.
 
 ## Using it
 
-- **Vote:** hover a line, click 👍 or 👎. Click the same one again to take it
+- **Hover any line** of an agent's reply. Four buttons appear beside it:
+  thumbs-up (agree), thumbs-down (disagree), question mark (ask the agent to
+  explain that line in more detail) and speech bubble (comment).
+- **Click a verdict.** The line gets a green, red or amber edge. A line holds
+  one verdict; click another to change it, or the same one again to take it
   back.
-- **Comment:** click 💬, type, press Enter to save (Shift+Enter for a new
-  line, Esc to cancel). Clicking elsewhere also saves. Clear the text, or
-  press **Remove**, to delete a comment.
-- **Send:** the bar above the message box shows how many lines you marked.
-  **Submit replies** sends them right away, or queues them if the agent is
-  still working. Anything already typed in the message box is sent along,
-  with the replies after it. **Clear** drops every mark in the thread.
+- **Comment only when a click isn't enough.** The speech bubble opens a box;
+  Enter saves, Shift+Enter starts a new line, Esc cancels. A comment can go
+  with any verdict ("Disagreed: 3 retries is enough") or stand alone.
+- **Send.** A bar above the message box counts what you marked. **Submit
+  replies** sends it at once, or queues it if the agent is still working.
+  Anything you had already typed in the message box goes along, with the
+  replies after it. **Clear** drops every mark in the thread.
+
+![A reviewed reply: one line marked agreed in green, one disagreed in red, a comment under another, and the Submit replies bar above the message box](assets/screenshots/marked-reply.png)
 
 What counts as a line: each paragraph, list item, table row (not the header)
 and code block. Headings and horizontal rules get no controls. A list item
@@ -47,6 +66,7 @@ are dropped.
 | `lib/lines.ts` | Splits a rendered reply into lines. |
 | `lib/marks.ts` | The marks store, shared by the content script and the bar, kept in localStorage. |
 | `lib/format.ts` | Builds the message sent to the agent. |
+| `lib/icons.ts` | The four toolbar icons, from [Tabler Icons](https://tabler.io/icons) (MIT). |
 | `app.tsx` | Registers the content script and the bar above the message box (a composer banner), which sends through BB's composer API. |
 | `app.css` | Styles, built from BB's theme variables. |
 | `server.ts` | Empty backend, required by BB. |
@@ -65,6 +85,18 @@ If a BB update changes these, the controls stop appearing. Nothing else
 breaks, and saved marks are kept. Sending uses BB's official composer API and
 is not affected.
 
+## Install
+
+From BB's plugin store: search for **Quick Review**. Or from a terminal:
+
+```
+bb plugin install git:https://github.com/mturilin/bb-plugin-quick-review.git
+```
+
+Requires BB 0.46 or later. Nothing else to install, no account, no external
+service: marks stay in your BB window until you send them, and the only thing
+that leaves is the message you send to your own agent.
+
 ## Development
 
 ```
@@ -72,5 +104,10 @@ npm install
 npm test            # unit tests (node --test, happy-dom)
 npm run typecheck
 bb plugin build
-bb plugin install . # once; afterwards: bb plugin reload line-review
+bb plugin install . # once; afterwards: bb plugin reload quick-review
 ```
+
+## License
+
+GPL-3.0. The toolbar icons are from [Tabler Icons](https://tabler.io/icons),
+MIT License.

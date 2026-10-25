@@ -19,6 +19,16 @@ test("a vote creates a mark and pressing it off removes the mark", () => {
   assert.equal(store.forThread("thr_a").length, 0);
 });
 
+test("a question replaces an earlier vote on the same line", () => {
+  const store = createMarksStore(null, () => 1);
+  store.update("thr_a", line("Add a cache"), { vote: "up" });
+  store.update("thr_a", line("Add a cache"), { vote: "question" });
+  assert.equal(store.forThread("thr_a").length, 1);
+  assert.equal(store.find("thr_a", line("Add a cache"))?.vote, "question");
+  const q = { rowId: "r", text: "t", occurrence: 0, index: 0, vote: "question", comment: "", updatedAt: 1 };
+  assert.equal(parseState(JSON.stringify({ thr_a: [q] }), 1).size, 1);
+});
+
 test("a comment-only mark is kept, and a blank comment removes it", () => {
   const store = createMarksStore(null, () => 1);
   store.update("thr_a", line("Retry 5 times"), { comment: "3 is enough" });
@@ -93,5 +103,5 @@ test("storage that throws does not break the store", () => {
   const store = createMarksStore(broken, () => 1);
   store.update("thr_a", line("A"), { vote: "up" });
   assert.equal(store.forThread("thr_a").length, 1);
-  assert.equal(STORAGE_KEY, "bb-line-review:v1");
+  assert.equal(STORAGE_KEY, "bb-quick-review:v1");
 });

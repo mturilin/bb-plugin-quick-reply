@@ -1,8 +1,8 @@
-// bb-plugin-line-review — frontend entry.
+// bb-plugin-quick-review — frontend entry.
 //
-// What: registers the two halves of Line Review.
-//   1. A content script (content.ts) that puts 👍 / 👎 / 💬 on each line of
-//      agent replies.
+// What: registers the two halves of Quick Review.
+//   1. A content script (content.ts) that puts agree / disagree / tell-me-more /
+//      comment buttons on each line of agent replies.
 //   2. A bar above the thread's message box that counts the marks and sends
 //      them to the agent with "Submit replies".
 // Why: reviewing long agent output line by line without copying text, and
@@ -77,10 +77,12 @@ function RepliesBar() {
 
   const up = marks.filter((m) => m.vote === "up").length;
   const down = marks.filter((m) => m.vote === "down").length;
+  const questions = marks.filter((m) => m.vote === "question").length;
   const comments = marks.filter((m) => m.comment.trim() !== "").length;
   const summary = [
-    up > 0 ? `${up} 👍` : null,
-    down > 0 ? `${down} 👎` : null,
+    up > 0 ? `${up} agreed` : null,
+    down > 0 ? `${down} disagreed` : null,
+    questions > 0 ? plural(questions, "question") : null,
     comments > 0 ? plural(comments, "comment") : null,
   ]
     .filter((part) => part !== null)

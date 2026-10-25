@@ -1,5 +1,5 @@
 /*
- * Line Review styles.
+ * Quick Review styles.
  *
  * Colors come from BB's theme variables (--popover, --border, --success, …)
  * so light and dark themes both work. The marks on BB's own elements are
@@ -28,6 +28,11 @@
   background-color: color-mix(in oklab, var(--destructive) 10%, transparent);
 }
 
+[data-lr-vote="question"] {
+  box-shadow: inset 3px 0 0 var(--warning);
+  background-color: color-mix(in oklab, var(--warning) 12%, transparent);
+}
+
 /* Paragraphs and list items get a little room so the colored edge does not
    touch the text. */
 p[data-lr-vote],
@@ -37,7 +42,8 @@ div[data-lr-vote] {
 }
 
 [data-lr-comment]::after {
-  content: "💬 " attr(data-lr-comment);
+  content: attr(data-lr-comment);
+  font-style: italic;
   display: block;
   margin-top: 0.25rem;
   padding: 0.25rem 0.5rem;
@@ -87,26 +93,44 @@ div[data-lr-vote] {
   justify-content: center;
   width: 26px;
   height: 24px;
+  padding: 0;
   border: 0;
   border-radius: 4px;
   background: transparent;
-  font-size: 14px;
-  line-height: 1;
+  color: var(--muted-foreground);
   cursor: pointer;
-  filter: grayscale(1);
-  opacity: 0.75;
+}
+
+.lr-icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
 }
 
 .lr-button:hover {
   background: var(--accent);
-  filter: none;
-  opacity: 1;
+  color: var(--foreground);
 }
 
+/* A pressed button takes its verdict's color, the same as the line's edge. */
 .lr-button[aria-pressed="true"] {
   background: var(--accent);
-  filter: none;
-  opacity: 1;
+}
+
+.lr-button[data-kind="up"][aria-pressed="true"] {
+  color: var(--success);
+}
+
+.lr-button[data-kind="down"][aria-pressed="true"] {
+  color: var(--destructive);
+}
+
+.lr-button[data-kind="question"][aria-pressed="true"] {
+  color: var(--warning);
+}
+
+.lr-button[data-kind="comment"][aria-pressed="true"] {
+  color: var(--foreground);
 }
 
 .lr-editor {

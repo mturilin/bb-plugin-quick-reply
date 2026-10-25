@@ -1,8 +1,9 @@
-// content.ts — puts 👍 / 👎 / 💬 controls on each line of agent replies.
+// content.ts — puts agree / disagree / tell-me-more / comment controls on each
+//   line of agent replies.
 //
 // What: a BB content script that finds agent replies in the chat, marks each
 //   reviewable line, shows a small floating toolbar on the line under the
-//   pointer, and a floating comment box when 💬 is pressed.
+//   pointer, and a floating comment box when the comment button is pressed.
 // Why: the user wants to react to long agent output line by line, in place,
 //   without copying text and without the agent knowing a tool is involved.
 //   BB offers no slot inside ordinary replies, so this works on the page.
@@ -28,6 +29,7 @@
 //   - Everything created here is removed when the signal aborts (plugin
 //     reload, disable, or BB shutdown).
 
+import { createIcon, type IconName } from "./lib/icons.ts";
 import { extractUnits, occurrences } from "./lib/lines.ts";
 import { marksStore, sameLine, STORAGE_KEY, type LineRef, type Vote } from "./lib/marks.ts";
 
@@ -83,11 +85,23 @@ function viewportRect(el: Element): DOMRect {
   return viewport?.getBoundingClientRect() ?? new DOMRect(0, 0, window.innerWidth, window.innerHeight);
 }
 
-function button(label: string, glyph: string, onClick: () => void): HTMLButtonElement {
+/**
+ * One toolbar button.
+ *
+ * @param kind - which verdict it sets ("up", "down", "question") or
+ *   "comment"; app.css colors the pressed state by it.
+ */
+function button(
+  kind: string,
+  label: string,
+  icon: IconName,
+  onClick: () => void,
+): HTMLButtonElement {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "lr-button";
-  b.textContent = glyph;
+  b.dataset.kind = kind;
+  b.append(createIcon(document, icon));
   b.title = label;
   b.setAttribute("aria-label", label);
   // Keep focus (and any text selection) where it was when clicking.
@@ -128,12 +142,15 @@ export function mountLineControls(signal: AbortSignal): () => void {
   toolbar.setAttribute("role", "toolbar");
   toolbar.setAttribute("aria-label", "Reply to this line");
   toolbar.hidden = true;
-  const upButton = button("Agree with this line", "👍", () => vote("up"));
-  const downButton = button("Disagree with this line", "👎", () => vote("down"));
-  const commentButton = button("Comment on this line", "💬", () => {
+  const upButton = button("up", "Agree with this line", "thumb-up", () => vote("up"));
+  const downButton = button("down", "Disagree with this line", "thumb-down", () => vote("down"));
+  const questionButton = button("question", "Ask for more detail on this line", "help-circle", () =>
+    vote("question"),
+  );
+  const commentButton = button("comment", "Comment on this line", "message", () => {
     if (active !== null) openEditor(active);
   });
-  toolbar.append(upButton, downButton, commentButton);
+  toolbar.append(upButton, downButton, questionButton, commentButton);
 
   const editor = document.createElement("div");
   editor.className = "lr-editor";
@@ -246,6 +263,7 @@ export function mountLineControls(signal: AbortSignal): () => void {
     const mark = binding === undefined ? undefined : store.find(binding.threadId, binding.ref);
     upButton.setAttribute("aria-pressed", String(mark?.vote === "up"));
     downButton.setAttribute("aria-pressed", String(mark?.vote === "down"));
+    questionButton.setAttribute("aria-pressed", String(mark?.vote === "question"));
     commentButton.setAttribute("aria-pressed", String((mark?.comment.trim() ?? "") !== ""));
   }
 

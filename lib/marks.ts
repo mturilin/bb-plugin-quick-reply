@@ -1,4 +1,5 @@
-// lib/marks.ts — the per-line marks (👍 / 👎 / comment) and where they are kept.
+// lib/marks.ts — the per-line marks (agree / disagree / tell me more / comment)
+//   and where they are kept.
 //
 // What: an in-memory store of line marks, grouped by thread and mirrored to
 //   localStorage, that the content script and the composer banner share.
@@ -21,8 +22,11 @@
 //   - Storage access can throw (quota, privacy mode). Marks then live only in
 //     memory for this window, which is still usable.
 
-/** A reviewer's verdict on one line; `null` means "comment only". */
-export type Vote = "up" | "down" | null;
+/**
+ * A reviewer's verdict on one line: agree, disagree, or "tell me more"
+ * (`question`). `null` means "comment only". One verdict per line.
+ */
+export type Vote = "up" | "down" | "question" | null;
 
 /** Where a line is: enough to find it again after BB re-renders the reply. */
 export interface LineRef {
@@ -71,7 +75,7 @@ export interface MarksStore {
   reload(): void;
 }
 
-export const STORAGE_KEY = "bb-line-review:v1";
+export const STORAGE_KEY = "bb-quick-review:v1";
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const EMPTY: readonly LineMark[] = Object.freeze([]);
 
@@ -115,7 +119,7 @@ function isLineMark(value: unknown): value is LineMark {
     typeof m.text === "string" &&
     typeof m.occurrence === "number" &&
     typeof m.index === "number" &&
-    (m.vote === "up" || m.vote === "down" || m.vote === null) &&
+    (m.vote === "up" || m.vote === "down" || m.vote === "question" || m.vote === null) &&
     typeof m.comment === "string" &&
     typeof m.updatedAt === "number"
   );

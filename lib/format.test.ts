@@ -8,21 +8,24 @@ const mark = (over: Partial<LineMark>): LineMark => ({
   rowId: "r1", text: "t", occurrence: 0, index: 0, vote: null, comment: "", updatedAt: 0, ...over,
 });
 
-test("formats quotes with the verdict underneath", () => {
+test("formats quotes with the verdict underneath, in words", () => {
   const text = formatReplies([
     mark({ text: "Use Postgres for the job queue", vote: "up" }),
     mark({ text: "Retry failed jobs 5 times", vote: "down", comment: "3 retries is enough", index: 1 }),
-    mark({ text: "Store results in S3", comment: "which bucket?", index: 2 }),
+    mark({ text: "Add a dead-letter queue", vote: "question", index: 2 }),
+    mark({ text: "Store results in S3", comment: "which bucket?", index: 3 }),
   ]);
   assert.equal(
     text,
     [
       "My replies, line by line:",
-      "> Use Postgres for the job queue\n👍",
-      "> Retry failed jobs 5 times\n👎 3 retries is enough",
-      "> Store results in S3\n💬 which bucket?",
+      "> Use Postgres for the job queue\nAgreed.",
+      "> Retry failed jobs 5 times\nDisagreed: 3 retries is enough",
+      "> Add a dead-letter queue\nPlease explain this in more detail.",
+      "> Store results in S3\nComment: which bucket?",
     ].join("\n\n"),
   );
+  assert.doesNotMatch(text, /[👍👎❓💬]/u);
 });
 
 test("nothing marked means nothing to send", () => {
@@ -36,9 +39,10 @@ test("multi-line text is quoted line by line and long text is cut", () => {
   assert.equal(long.length, 2 + QUOTE_LIMIT + 1);
 });
 
-test("verdict trims the comment", () => {
-  assert.equal(verdict({ vote: "up", comment: "  yes  " }), "👍 yes");
-  assert.equal(verdict({ vote: "down", comment: "" }), "👎");
+test("verdict trims the comment and words each vote", () => {
+  assert.equal(verdict({ vote: "up", comment: "  but use the existing bucket  " }), "Agreed: but use the existing bucket");
+  assert.equal(verdict({ vote: "down", comment: "" }), "Disagreed.");
+  assert.equal(verdict({ vote: "question", comment: "why not Redis?" }), "Please explain in more detail: why not Redis?");
 });
 
 test("orders by row position on the page, then by line position", () => {
