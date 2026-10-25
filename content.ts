@@ -298,6 +298,11 @@ export function mountLineControls(signal: AbortSignal): () => void {
   /**
    * Put the toolbar beside the active line: right of the reply when there is
    * room inside the chat viewport, otherwise over the reply's right edge.
+   *
+   * Inside the reply, the toolbar must not cover BB's own controls in the
+   * line. A code block's header holds a "Copy code" button in its top-right
+   * corner, exactly where the toolbar lands, so the toolbar steps left of any
+   * button or link it would overlap (found by `shiftClearOf`).
    */
   function positionToolbar() {
     if (active === null || toolbar.hidden) return;
@@ -318,9 +323,29 @@ export function mountLineControls(signal: AbortSignal): () => void {
     const width = toolbar.offsetWidth;
     const height = toolbar.offsetHeight;
     let left = reply.right + 6;
-    if (left + width > bounds.right - 4) left = reply.right - width;
     const top = Math.min(Math.max(line.top, bounds.top + 2), bounds.bottom - height - 2);
+    if (left + width > bounds.right - 4) {
+      left = shiftClearOf(active, reply.right - width, top, width, height);
+      left = Math.max(left, reply.left);
+    }
     toolbar.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+  }
+
+  /**
+   * Move a toolbar placed at (`left`, `top`) leftwards until it overlaps none
+   * of the clickable elements inside `line` (BB's copy buttons, links).
+   *
+   * Returns the new left edge; unchanged when nothing is in the way.
+   */
+  function shiftClearOf(line: HTMLElement, left: number, top: number, width: number, height: number): number {
+    const controls = Array.from(line.querySelectorAll("button, a[href], [role='button']"))
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0 && r.bottom > top && r.top < top + height)
+      .sort((a, b) => b.right - a.right);
+    for (const r of controls) {
+      if (r.right > left && r.left < left + width) left = r.left - width - 4;
+    }
+    return left;
   }
 
   function vote(value: Exclude<Vote, null>) {
