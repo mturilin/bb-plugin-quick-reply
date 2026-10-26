@@ -429,6 +429,38 @@ export function mountLineControls(signal: AbortSignal): () => void {
     }
   }
 
+  /**
+   * The line whose displayed comment sits under the point (x, y), or null.
+   *
+   * The comment is drawn by CSS as the line's `::after` box, which the DOM
+   * cannot hit-test on its own: a click on it lands on the line element.
+   * So the comment's area is worked out from the pseudo-element's computed
+   * height: the band just above the element's bottom padding.
+   */
+  function commentAt(target: Element, x: number, y: number): HTMLElement | null {
+    const holder = target.closest<HTMLElement>(`[${COMMENT_ATTR}]`);
+    if (holder === null) return null;
+    const line = holder.closest<HTMLElement>(`[${UNIT_ATTR}]`);
+    if (line === null || !bindings.has(line)) return null;
+    const after = getComputedStyle(holder, "::after");
+    const height = parseFloat(after.height) + parseFloat(after.marginTop || "0");
+    if (!Number.isFinite(height) || height <= 0) return null;
+    const box = holder.getBoundingClientRect();
+    const bottom = box.bottom - parseFloat(getComputedStyle(holder).paddingBottom || "0");
+    const inside = y >= bottom - height && y <= bottom && x >= box.left && x <= box.right;
+    return inside ? line : null;
+  }
+
+  /** Clicking a comment shown under a line opens it for editing. */
+  function onClick(event: MouseEvent) {
+    if (!(event.target instanceof Element) || layer.contains(event.target)) return;
+    const line = commentAt(event.target, event.clientX, event.clientY);
+    if (line === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openEditor(line);
+  }
+
   function onEditorKey(event: KeyboardEvent) {
     // Keep BB's own shortcuts from seeing keys typed into the comment box.
     event.stopPropagation();
@@ -454,6 +486,8 @@ export function mountLineControls(signal: AbortSignal): () => void {
   const listen = { capture: true, passive: true } as const;
   document.addEventListener("pointerover", onPointerOver, listen);
   document.addEventListener("pointerdown", onPointerDown, listen);
+  // Not passive: a click on a comment is consumed so BB does not also act on it.
+  document.addEventListener("click", onClick, { capture: true });
   document.addEventListener("scroll", positionAll, listen);
   window.addEventListener("resize", positionAll, listen);
   window.addEventListener("storage", onStorage);
@@ -471,6 +505,7 @@ export function mountLineControls(signal: AbortSignal): () => void {
     unsubscribe();
     document.removeEventListener("pointerover", onPointerOver, listen);
     document.removeEventListener("pointerdown", onPointerDown, listen);
+    document.removeEventListener("click", onClick, { capture: true });
     document.removeEventListener("scroll", positionAll, listen);
     window.removeEventListener("resize", positionAll, listen);
     window.removeEventListener("storage", onStorage);

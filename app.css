@@ -41,8 +41,10 @@ div[data-lr-vote] {
   padding-left: 0.5rem;
 }
 
+/* Clicking the comment opens it for editing (content.ts, onClick). */
 [data-lr-comment]::after {
   content: attr(data-lr-comment);
+  cursor: pointer;
   font-style: italic;
   display: block;
   margin-top: 0.25rem;

@@ -40,7 +40,8 @@ command or tool to agent threads, and the message reads like one you wrote.
   one verdict; click another to change it, or the same one again to take it
   back.
 - **Comment only when a click isn't enough.** The speech bubble opens a box;
-  Enter saves, Shift+Enter starts a new line, Esc cancels. A comment can go
+  Enter saves, Shift+Enter starts a new line, Esc cancels. Click a comment
+  shown under a line to edit it. A comment can go
   with any verdict ("Disagreed: 3 retries is enough") or stand alone.
 - **Send.** A bar above the message box counts what you marked. **Submit
   replies** sends it at once, or queues it if the agent is still working.
