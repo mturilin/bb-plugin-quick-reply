@@ -1,17 +1,25 @@
-// lib/icons.ts — the toolbar's four icons, drawn as inline SVG.
+// lib/icons.ts — the plugin's icons, drawn as inline SVG.
 //
 // What: path data for Tabler Icons' outline `thumb-up`, `thumb-down`,
-//   `help-circle` and `message` (v3.49.0), and a helper that builds an <svg>.
+//   `help-circle`, `message`, `paperclip`, `file` and `x` (v3.49.0), and a
+//   helper that builds an <svg>.
 // Why: emoji come with their own colors and shapes (❓ is tall and narrow
 //   next to 👍), so the four buttons looked uneven. Line icons share one size
 //   and stroke, take the surrounding text color, and match BB's own buttons.
-// Design notes: the paths are copied rather than installed as a package; four
-//   icons do not justify a dependency. The content script builds plain DOM, so
+// Design notes: the paths are copied rather than installed as a package; a
+//   handful of icons does not justify a dependency. The content script builds plain DOM, so
 //   it cannot use BB's React icon component.
 // License: Tabler Icons, MIT License, Copyright (c) 2020-2026 Paweł Kuna,
 //   https://github.com/tabler/tabler-icons
 
-export type IconName = "thumb-up" | "thumb-down" | "help-circle" | "message";
+export type IconName =
+  | "thumb-up"
+  | "thumb-down"
+  | "help-circle"
+  | "message"
+  | "paperclip"
+  | "file"
+  | "x";
 
 const PATHS: Record<IconName, readonly string[]> = {
   "thumb-up": [
@@ -30,6 +38,12 @@ const PATHS: Record<IconName, readonly string[]> = {
     "M8 13h6",
     "M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12",
   ],
+  paperclip: ["M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5 -6.5a3 3 0 0 0 -6 -6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5 -6.5"],
+  file: [
+    "M14 3v4a1 1 0 0 0 1 1h4",
+    "M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2",
+  ],
+  x: ["M18 6l-12 12", "M6 6l12 12"],
 };
 
 const SVG_NS = "http://www.w3.org/2000/svg";

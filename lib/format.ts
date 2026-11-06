@@ -1,7 +1,7 @@
 // lib/format.ts — turns line marks into the message sent to the agent.
 //
 // What: builds plain Markdown that quotes each marked line and puts the
-//   verdict and comment under it, in words.
+//   verdict, the comment and the names of attached files under it, in words.
 // Why: the agent must understand the reply without knowing a plugin made it,
 //   so the output reads like something a person would type: a quote, then a
 //   reaction.
@@ -15,6 +15,7 @@
 //     characters; the quote only has to identify the line, and the agent
 //     still has the full text in its own history.
 
+import { attachmentReferences } from "./attachments.ts";
 import type { LineMark } from "./marks.ts";
 
 export const QUOTE_LIMIT = 300;
@@ -66,11 +67,12 @@ export const VERDICT_WORDS = {
 /**
  * The reaction line under a quote: the verdict in words, then the comment.
  * Returns e.g. "Agreed.", "Disagreed: 3 retries is enough", or
- * "Comment: which bucket?" for a comment with no verdict.
+ * "Comment: which bucket?" for a comment with no verdict; "" when there is
+ * neither, which happens on a line that only has files attached.
  */
 export function verdict(mark: Pick<LineMark, "vote" | "comment">): string {
   const comment = mark.comment.trim();
-  if (mark.vote === null) return `Comment: ${comment}`;
+  if (mark.vote === null) return comment === "" ? "" : `Comment: ${comment}`;
   const words = VERDICT_WORDS[mark.vote];
   return comment === "" ? words.alone : `${words.lead}: ${comment}`;
 }
@@ -80,10 +82,26 @@ export function verdict(mark: Pick<LineMark, "vote" | "comment">): string {
  *
  * @param marks - marks already in conversation order (see orderMarks).
  * Returns "" when there is nothing to send; otherwise the header followed by
- * one quote + verdict pair per mark, separated by blank lines.
+ * one block per mark, separated by blank lines: the quote, the verdict, and an
+ * "Attached:" line naming the mark's files. The files themselves go out as the
+ * message's attachments (see app.tsx).
  */
 export function formatReplies(marks: readonly LineMark[]): string {
   if (marks.length === 0) return "";
-  const blocks = marks.map((m) => `${quote(m.text)}\n${verdict(m)}`);
+  const blocks = marks.map((m) =>
+    [
+      quote(m.text),
+      verdict(m),
+      m.attachments.length === 0 ? "" : `Attached: ${attachmentReferences(m.attachments)}`,
+    ]
+      .filter((line) => line !== "")
+      .join("\n"),
+  );
   return [HEADER, ...blocks].join("\n\n");
+}
+
+/** `block` after `text`, separated by a blank line; just `block` when `text` is blank. */
+export function appendBlock(text: string, block: string): string {
+  const kept = text.trimEnd();
+  return kept === "" ? block : `${kept}\n\n${block}`;
 }
