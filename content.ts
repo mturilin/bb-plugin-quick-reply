@@ -28,10 +28,24 @@
 //     ignored.
 //   - Everything created here is removed when the signal aborts (plugin
 //     reload, disable, or BB shutdown).
+//   - Files added to a comment upload right away, but join the mark only on
+//     Save. While an upload runs the box cannot be saved, by any route: Enter,
+//     Save, clicking away, or opening another line. Otherwise the file would
+//     arrive after its comment was already gone. Cancel and Remove still work
+//     and drop the upload's result.
 
+import { toast } from "sonner";
+import { commentLabel, readAttachmentBlob, uploadAttachment } from "./lib/attachments.ts";
 import { createIcon, type IconName } from "./lib/icons.ts";
 import { extractUnits, occurrences } from "./lib/lines.ts";
-import { marksStore, sameLine, STORAGE_KEY, type LineRef, type Vote } from "./lib/marks.ts";
+import {
+  marksStore,
+  sameLine,
+  STORAGE_KEY,
+  type LineAttachment,
+  type LineRef,
+  type Vote,
+} from "./lib/marks.ts";
 
 const ROW_SELECTOR = "[data-timeline-row-id]";
 const MARKDOWN_SELECTOR = "[data-markdown-preview]";
@@ -130,6 +144,12 @@ export function mountLineControls(signal: AbortSignal): () => void {
   let decorated = new Set<HTMLElement>();
   let active: HTMLElement | null = null; // line under the toolbar
   let editing: { el: HTMLElement; binding: Binding } | null = null;
+  // The open comment box's files. `uploadSession` changes whenever the box
+  // closes, so an upload that finishes later knows its result is no longer wanted.
+  let draftAttachments: readonly LineAttachment[] = [];
+  let pendingUploads = 0;
+  let uploadSession = 0;
+  const previews = new Map<string, Promise<string>>(); // attachment path → object URL
   let rescanTimer: ReturnType<typeof setTimeout> | null = null;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -158,18 +178,22 @@ export function mountLineControls(signal: AbortSignal): () => void {
   const textarea = document.createElement("textarea");
   textarea.className = "lr-textarea";
   textarea.rows = 3;
-  textarea.placeholder = "Comment on this line";
+  textarea.placeholder = "Comment on this line. Paste or drop files here";
   textarea.setAttribute("aria-label", "Comment on this line");
   const hint = document.createElement("span");
   hint.className = "lr-hint";
-  hint.textContent = "Enter to save · Shift+Enter for a new line · Esc to cancel";
+  hint.textContent = "Enter saves · Shift+Enter new line · Esc cancels";
   const actions = document.createElement("div");
   actions.className = "lr-editor-actions";
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "lr-text-button";
   removeButton.textContent = "Remove";
-  removeButton.addEventListener("click", () => saveEditor(""));
+  removeButton.addEventListener("click", () => {
+    discardUploads();
+    draftAttachments = [];
+    saveEditor("");
+  });
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.className = "lr-text-button";
@@ -180,8 +204,20 @@ export function mountLineControls(signal: AbortSignal): () => void {
   saveButton.className = "lr-text-button lr-primary";
   saveButton.textContent = "Save";
   saveButton.addEventListener("click", () => saveEditor(textarea.value));
-  actions.append(hint, removeButton, cancelButton, saveButton);
-  editor.append(textarea, actions);
+  const attachmentList = document.createElement("div");
+  attachmentList.className = "lr-attachments";
+  attachmentList.hidden = true;
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.multiple = true;
+  fileInput.hidden = true;
+  fileInput.addEventListener("change", () => {
+    addFiles(Array.from(fileInput.files ?? []));
+    fileInput.value = ""; // so the same file can be picked again after removing it
+  });
+  const attachButton = button("attach", "Attach files", "paperclip", () => fileInput.click());
+  actions.append(attachButton, hint, removeButton, cancelButton, saveButton);
+  editor.append(textarea, attachmentList, actions, fileInput);
 
   layer.append(toolbar, editor);
   document.body.append(layer);
@@ -193,8 +229,8 @@ export function mountLineControls(signal: AbortSignal): () => void {
     const mark = store.find(binding.threadId, binding.ref);
     setAttr(el, UNIT_ATTR, "");
     setAttr(el, VOTE_ATTR, mark?.vote ?? null);
-    const comment = mark?.comment.trim() ?? "";
-    setAttr(commentTarget(el), COMMENT_ATTR, comment === "" ? null : comment);
+    const label = mark === undefined ? "" : commentLabel(mark);
+    setAttr(commentTarget(el), COMMENT_ATTR, label === "" ? null : label);
   }
 
   function unpaint(el: HTMLElement) {
@@ -264,7 +300,10 @@ export function mountLineControls(signal: AbortSignal): () => void {
     upButton.setAttribute("aria-pressed", String(mark?.vote === "up"));
     downButton.setAttribute("aria-pressed", String(mark?.vote === "down"));
     questionButton.setAttribute("aria-pressed", String(mark?.vote === "question"));
-    commentButton.setAttribute("aria-pressed", String((mark?.comment.trim() ?? "") !== ""));
+    commentButton.setAttribute(
+      "aria-pressed",
+      String(mark !== undefined && commentLabel(mark) !== ""),
+    );
   }
 
   function show(el: HTMLElement) {
@@ -361,24 +400,140 @@ export function mountLineControls(signal: AbortSignal): () => void {
   function openEditor(el: HTMLElement) {
     const binding = bindings.get(el);
     if (binding === undefined) return;
-    if (editing !== null && editing.el !== el) saveEditor(textarea.value);
+    if (editing !== null && editing.el !== el) {
+      if (pendingUploads > 0) return;
+      saveEditor(textarea.value);
+    }
+    if (editing?.el !== el) {
+      const mark = store.find(binding.threadId, binding.ref);
+      textarea.value = mark?.comment ?? "";
+      draftAttachments = mark?.attachments ?? [];
+    }
     editing = { el, binding };
-    textarea.value = store.find(binding.threadId, binding.ref)?.comment ?? "";
     editor.hidden = false;
-    positionEditor();
+    renderAttachments();
     textarea.focus();
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }
 
   function saveEditor(value: string) {
-    if (editing === null) return;
-    store.update(editing.binding.threadId, editing.binding.ref, { comment: value.trim() });
+    if (editing === null || pendingUploads > 0) return;
+    store.update(editing.binding.threadId, editing.binding.ref, {
+      comment: value.trim(),
+      attachments: draftAttachments,
+    });
     closeEditor();
   }
 
   function closeEditor() {
+    discardUploads();
+    draftAttachments = [];
     editing = null;
     editor.hidden = true;
+  }
+
+  /** Forget uploads in progress; their results are dropped when they arrive. */
+  function discardUploads() {
+    uploadSession += 1;
+    pendingUploads = 0;
+  }
+
+  /**
+   * Upload `files` for the open comment box.
+   *
+   * Post-conditions: each file that uploads joins the box's list, unless the
+   * box closed in the meantime. A failed upload shows an error toast.
+   */
+  function addFiles(files: readonly File[]) {
+    if (editing === null || files.length === 0) return;
+    const threadId = editing.binding.threadId;
+    const session = uploadSession;
+    pendingUploads += files.length;
+    renderAttachments();
+    for (const file of files) {
+      void uploadAttachment(threadId, file)
+        .then(
+          (attachment) => {
+            if (session !== uploadSession) return;
+            if (attachment.type === "localImage") {
+              previews.set(attachment.path, Promise.resolve(URL.createObjectURL(file)));
+            }
+            draftAttachments = [...draftAttachments, attachment];
+          },
+          (cause: unknown) => {
+            if (session !== uploadSession) return;
+            const reason = cause instanceof Error ? cause.message : String(cause);
+            toast.error(`Could not attach ${file.name}: ${reason}`);
+          },
+        )
+        .finally(() => {
+          if (session !== uploadSession) return;
+          pendingUploads -= 1;
+          renderAttachments();
+        });
+    }
+  }
+
+  /** Redraw the box's file list and the Save button that depends on it. */
+  function renderAttachments() {
+    const threadId = editing?.binding.threadId;
+    attachmentList.replaceChildren();
+    if (threadId !== undefined) {
+      for (const attachment of draftAttachments) {
+        attachmentList.append(attachmentChip(threadId, attachment));
+      }
+    }
+    if (pendingUploads > 0) {
+      const status = document.createElement("span");
+      status.className = "lr-attachment-status";
+      status.textContent = `Uploading ${pendingUploads} file${pendingUploads === 1 ? "" : "s"}…`;
+      attachmentList.append(status);
+    }
+    attachmentList.hidden = attachmentList.childElementCount === 0;
+    saveButton.disabled = pendingUploads > 0;
+    positionEditor();
+  }
+
+  /** One file in the box: a thumbnail or file icon, its name, and a remove button. */
+  function attachmentChip(threadId: string, attachment: LineAttachment): HTMLElement {
+    const chip = document.createElement("div");
+    chip.className = "lr-attachment";
+    chip.title = attachment.name;
+    const icon = createIcon(document, "file");
+    chip.append(icon);
+    if (attachment.type === "localImage") {
+      void previewUrl(threadId, attachment).then(
+        (url) => {
+          const image = document.createElement("img");
+          image.className = "lr-attachment-thumb";
+          image.alt = "";
+          image.src = url;
+          icon.replaceWith(image);
+        },
+        () => {
+          // No thumbnail: the file icon stays, the attachment itself is fine.
+        },
+      );
+    }
+    const name = document.createElement("span");
+    name.className = "lr-attachment-name";
+    name.textContent = attachment.name;
+    const remove = button("remove", `Remove ${attachment.name}`, "x", () => {
+      draftAttachments = draftAttachments.filter((a) => a !== attachment);
+      renderAttachments();
+    });
+    chip.append(name, remove);
+    return chip;
+  }
+
+  /** A thumbnail URL for an uploaded image, read from BB once per session. */
+  function previewUrl(threadId: string, attachment: LineAttachment): Promise<string> {
+    let url = previews.get(attachment.path);
+    if (url === undefined) {
+      url = readAttachmentBlob(threadId, attachment).then((blob) => URL.createObjectURL(blob));
+      previews.set(attachment.path, url);
+    }
+    return url;
   }
 
   /** Put the comment box under its line, or above it near the bottom edge. */
@@ -473,6 +628,36 @@ export function mountLineControls(signal: AbortSignal): () => void {
     }
   }
 
+  /** Pasted files attach; pasted text goes into the box as usual. */
+  function onEditorPaste(event: ClipboardEvent) {
+    event.stopPropagation(); // BB's message box must not take this paste too.
+    const files = Array.from(event.clipboardData?.files ?? []);
+    if (files.length === 0) return;
+    event.preventDefault();
+    addFiles(files);
+  }
+
+  function onEditorDragOver(event: DragEvent) {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    editor.dataset.dropping = "";
+  }
+
+  function onEditorDragLeave(event: DragEvent) {
+    if (event.relatedTarget instanceof Node && editor.contains(event.relatedTarget)) return;
+    delete editor.dataset.dropping;
+  }
+
+  function onEditorDrop(event: DragEvent) {
+    delete editor.dataset.dropping;
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    addFiles(Array.from(event.dataTransfer.files));
+  }
+
   function onStorage(event: StorageEvent) {
     if (event.key === null || event.key === STORAGE_KEY) store.reload();
   }
@@ -492,6 +677,10 @@ export function mountLineControls(signal: AbortSignal): () => void {
   window.addEventListener("resize", positionAll, listen);
   window.addEventListener("storage", onStorage);
   textarea.addEventListener("keydown", onEditorKey);
+  textarea.addEventListener("paste", onEditorPaste);
+  editor.addEventListener("dragover", onEditorDragOver);
+  editor.addEventListener("dragleave", onEditorDragLeave);
+  editor.addEventListener("drop", onEditorDrop);
   editor.addEventListener("keyup", (event) => event.stopPropagation());
   const unsubscribe = store.subscribe(scheduleScan);
 
@@ -501,6 +690,9 @@ export function mountLineControls(signal: AbortSignal): () => void {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    discardUploads();
+    for (const url of previews.values()) void url.then(URL.revokeObjectURL, () => {});
+    previews.clear();
     observer.disconnect();
     unsubscribe();
     document.removeEventListener("pointerover", onPointerOver, listen);

@@ -43,6 +43,10 @@ command or tool to agent threads, and the message reads like one you wrote.
   Enter saves, Shift+Enter starts a new line, Esc cancels. Click a comment
   shown under a line to edit it. A comment can go
   with any verdict ("Disagreed: 3 retries is enough") or stand alone.
+- **Attach files to a comment.** Paste a screenshot, drop files on the box, or
+  use the paperclip. Files upload right away and show under the text, with a
+  thumbnail for images; a comment can be files alone. On **Submit replies**
+  they go out as ordinary attachments of the message, named under their quote.
 - **Send.** A bar above the message box counts what you marked. **Submit
   replies** sends it at once, or queues it if the agent is still working.
   Anything you had already typed in the message box goes along, with the
@@ -67,7 +71,8 @@ are dropped.
 | `lib/lines.ts` | Splits a rendered reply into lines. |
 | `lib/marks.ts` | The marks store, shared by the content script and the bar, kept in localStorage. |
 | `lib/format.ts` | Builds the message sent to the agent. |
-| `lib/icons.ts` | The four toolbar icons, from [Tabler Icons](https://tabler.io/icons) (MIT). |
+| `lib/attachments.ts` | Uploads files on comments through the BB SDK and reads them back for thumbnails. |
+| `lib/icons.ts` | The plugin's icons, from [Tabler Icons](https://tabler.io/icons) (MIT). |
 | `app.tsx` | Registers the content script and the bar above the message box (a composer banner), which sends through BB's composer API. |
 | `app.css` | Styles, built from BB's theme variables. |
 | `server.ts` | Empty backend, required by BB. |
@@ -96,7 +101,9 @@ bb plugin install git:https://github.com/mturilin/bb-plugin-quick-reply.git
 
 Requires BB 0.46 or later. Nothing else to install, no account, no external
 service: marks stay in your BB window until you send them, and the only thing
-that leaves is the message you send to your own agent.
+that leaves is the message you send to your own agent. Files on comments are
+stored by your BB, in the project's attachments. BB's plugin API cannot delete
+them, so a file removed before sending stays there unused.
 
 ## Development
 

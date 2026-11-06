@@ -40,10 +40,27 @@ export interface LineRef {
   index: number;
 }
 
-/** One marked line. A mark with no vote and an empty comment is never stored. */
+/**
+ * A file on a line's comment, already uploaded to BB. The fields match the SDK's
+ * composer attachment, so a mark's attachments can go straight into the draft.
+ */
+export interface LineAttachment {
+  type: "localFile" | "localImage";
+  path: string;
+  name: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  sourceProjectId?: string;
+}
+
+/**
+ * One marked line. A mark with no vote, an empty comment and no attachments is
+ * never stored.
+ */
 export interface LineMark extends LineRef {
   vote: Vote;
   comment: string;
+  attachments: readonly LineAttachment[];
   /** Epoch milliseconds of the last change. */
   updatedAt: number;
 }
@@ -61,10 +78,14 @@ export interface MarksStore {
   find(threadId: string, ref: LineRef): LineMark | undefined;
   /**
    * Create, update, or delete the mark for a line.
-   * Post-conditions: a mark left with no vote and a blank comment is removed;
-   *   listeners are notified; the new state is persisted.
+   * Post-conditions: a mark left with no vote, a blank comment and no
+   *   attachments is removed; listeners are notified; the new state is persisted.
    */
-  update(threadId: string, ref: LineRef, patch: { vote?: Vote; comment?: string }): void;
+  update(
+    threadId: string,
+    ref: LineRef,
+    patch: { vote?: Vote; comment?: string; attachments?: readonly LineAttachment[] },
+  ): void;
   /** Remove exactly these marks (e.g. the ones just sent). Post-conditions as `update`. */
   remove(threadId: string, marks: readonly LineRef[]): void;
   /** Remove every mark in a thread. Post-conditions as `update`. */
@@ -104,14 +125,38 @@ export function parseState(raw: string | null, now: number): Map<string, LineMar
   if (typeof data !== "object" || data === null) return state;
   for (const [threadId, list] of Object.entries(data as Record<string, unknown>)) {
     if (!Array.isArray(list)) continue;
-    const marks = list.filter(isLineMark);
+    // Marks saved before attachments existed have no such field.
+    const marks = list
+      .filter(isLineMark)
+      .map((m) => ({ ...m, attachments: parseAttachments((m as { attachments?: unknown }).attachments) }));
     const newest = Math.max(0, ...marks.map((m) => m.updatedAt));
     if (marks.length > 0 && now - newest < MAX_AGE_MS) state.set(threadId, marks);
   }
   return state;
 }
 
-function isLineMark(value: unknown): value is LineMark {
+/** Keep only well-formed attachments, with only the known fields. */
+function parseAttachments(value: unknown): LineAttachment[] {
+  if (!Array.isArray(value)) return [];
+  const attachments: LineAttachment[] = [];
+  for (const item of value as unknown[]) {
+    if (typeof item !== "object" || item === null) continue;
+    const a = item as Record<string, unknown>;
+    if (a.type !== "localFile" && a.type !== "localImage") continue;
+    if (typeof a.path !== "string" || a.path === "" || typeof a.name !== "string") continue;
+    attachments.push({
+      type: a.type,
+      path: a.path,
+      name: a.name,
+      ...(typeof a.mimeType === "string" ? { mimeType: a.mimeType } : {}),
+      ...(typeof a.sizeBytes === "number" ? { sizeBytes: a.sizeBytes } : {}),
+      ...(typeof a.sourceProjectId === "string" ? { sourceProjectId: a.sourceProjectId } : {}),
+    });
+  }
+  return attachments;
+}
+
+function isLineMark(value: unknown): value is Omit<LineMark, "attachments"> {
   if (typeof value !== "object" || value === null) return false;
   const m = value as Record<string, unknown>;
   return (
@@ -172,9 +217,11 @@ export function createMarksStore(
         index: ref.index,
         vote: patch.vote !== undefined ? patch.vote : (existing?.vote ?? null),
         comment: patch.comment !== undefined ? patch.comment : (existing?.comment ?? ""),
+        attachments: patch.attachments ?? existing?.attachments ?? [],
         updatedAt: now(),
       };
-      const keep = merged.vote !== null || merged.comment.trim() !== "";
+      const keep =
+        merged.vote !== null || merged.comment.trim() !== "" || merged.attachments.length > 0;
       const rest = current.filter((m) => !sameLine(m, ref));
       if (!keep && rest.length === current.length) return; // nothing to delete
       if (!keep) return commit(threadId, rest);

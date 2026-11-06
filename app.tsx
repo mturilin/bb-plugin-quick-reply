@@ -17,12 +17,16 @@
 //     restored to what it was and the marks are kept.
 //   - Marks are cleared only for the lines that were actually sent, so a mark
 //     added while sending survives.
+//   - Files on comments are already uploaded (lib/attachments.ts). Sending
+//     adds them to the draft next to whatever the user attached there, so they
+//     reach the agent like files attached by hand.
 
-import { useState, useSyncExternalStore } from "react";
-import { definePluginApp, useComposer } from "@get-bb/plugin-sdk/app";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { definePluginApp, useComposer, useSdk } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { mountLineControls } from "./content.ts";
-import { formatReplies, orderMarks } from "./lib/format.ts";
+import { setAttachmentClient } from "./lib/attachments.ts";
+import { appendBlock, formatReplies, orderMarks } from "./lib/format.ts";
 import { marksStore, type LineMark } from "./lib/marks.ts";
 import "./app.css";
 
@@ -55,6 +59,16 @@ function rowRanks(): Map<string, number> {
   return ranks;
 }
 
+/**
+ * Resolve once `isReady()` is true, or after about a second regardless: the
+ * caller's next step then reports the failure itself.
+ */
+async function waitUntil(isReady: () => boolean): Promise<void> {
+  for (let tries = 0; tries < 50 && !isReady(); tries += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
 /** "1 line" / "3 lines". */
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -73,17 +87,25 @@ function RepliesBar() {
   const threadId = composer.scope.kind === "thread" ? composer.scope.threadId : null;
   const marks = useThreadMarks(threadId);
   const [sending, setSending] = useState(false);
+  const latest = useRef(composer);
+  latest.current = composer;
+  const sdk = useSdk();
+  // Runs even while the bar shows nothing: the comment box needs the client to
+  // upload the first file of a line that has no mark yet.
+  useEffect(() => setAttachmentClient(sdk), [sdk]);
   if (threadId === null || marks.length === 0) return null;
 
   const up = marks.filter((m) => m.vote === "up").length;
   const down = marks.filter((m) => m.vote === "down").length;
   const questions = marks.filter((m) => m.vote === "question").length;
   const comments = marks.filter((m) => m.comment.trim() !== "").length;
+  const fileCount = marks.reduce((total, m) => total + m.attachments.length, 0);
   const summary = [
     up > 0 ? `${up} agreed` : null,
     down > 0 ? `${down} disagreed` : null,
     questions > 0 ? plural(questions, "question") : null,
     comments > 0 ? plural(comments, "comment") : null,
+    fileCount > 0 ? plural(fileCount, "file") : null,
   ]
     .filter((part) => part !== null)
     .join(" · ");
@@ -94,7 +116,19 @@ function RepliesBar() {
     const saved = composer.draft;
     setSending(true);
     try {
-      composer.insert(formatReplies(sent), { at: "end", block: true });
+      // One atomic change: text and files must reach the draft together.
+      const files = sent.flatMap((m) => m.attachments);
+      composer.replace((draft) => ({
+        text: appendBlock(draft.text, formatReplies(sent)),
+        mentions: draft.mentions,
+        attachments: [...draft.attachments, ...files],
+      }));
+      // `submit` reads the draft of the last render, and `replace` only asks for
+      // a new one. Submitting right away would send what was there before.
+      await waitUntil(() => {
+        const { text, attachments } = latest.current.draft;
+        return text !== saved.text && attachments.length === saved.attachments.length + files.length;
+      });
       // The SDK requires an options object; `experimental_data` only reaches
       // other plugins' dispatch hooks, never the agent.
       await composer.submit({ experimental_data: null });

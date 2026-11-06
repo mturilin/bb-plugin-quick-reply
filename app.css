@@ -161,6 +161,66 @@ div[data-lr-vote] {
   border-color: var(--ring);
 }
 
+.lr-editor[data-dropping] {
+  border-color: var(--ring);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18), 0 0 0 1px var(--ring);
+}
+
+.lr-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.lr-attachments[hidden] {
+  display: none;
+}
+
+.lr-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 2px 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 0.5rem);
+  background: var(--background);
+  font-size: 0.75rem;
+}
+
+.lr-attachment-thumb {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.lr-attachment-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lr-attachment .lr-button {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.lr-attachment .lr-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.lr-attachment-status {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
 .lr-editor-actions {
   display: flex;
   align-items: center;
