@@ -41,6 +41,16 @@ div[data-lr-vote] {
   padding-left: 0.5rem;
 }
 
+/* Comments are violet so they stand out from the reply text. BB's theme has
+   no blue or purple variable (only success, warning, destructive), so the
+   color is fixed here; oklch at this lightness reads on both light and dark
+   backgrounds, and the tint is mixed with transparent so it follows the
+   theme. Violet rather than blue so a comment does not look like a link or
+   BB's own accents. */
+:root {
+  --lr-comment: oklch(0.62 0.19 290);
+}
+
 /* Clicking the comment opens it for editing (content.ts, onClick). */
 [data-lr-comment]::after {
   content: attr(data-lr-comment);
@@ -49,11 +59,20 @@ div[data-lr-vote] {
   display: block;
   margin-top: 0.25rem;
   padding: 0.25rem 0.5rem;
-  border-left: 2px solid var(--border);
-  color: var(--muted-foreground);
+  border-left: 3px solid var(--lr-comment);
+  border-radius: 0 4px 4px 0;
+  background-color: color-mix(in oklab, var(--lr-comment) 10%, transparent);
+  color: var(--lr-comment);
   font-family: inherit;
   font-size: 0.8125rem;
   white-space: pre-wrap;
+  transition: background-color 120ms ease-out;
+}
+
+/* The comment sits inside the marked line, so hovering the line is the
+   closest signal we have; a stronger tint hints that it can be clicked. */
+[data-lr-comment]:hover::after {
+  background-color: color-mix(in oklab, var(--lr-comment) 18%, transparent);
 }
 
 /* ---- floating controls --------------------------------------------------- */
@@ -132,7 +151,7 @@ div[data-lr-vote] {
 }
 
 .lr-button[data-kind="comment"][aria-pressed="true"] {
-  color: var(--foreground);
+  color: var(--lr-comment);
 }
 
 .lr-editor {
