@@ -43,8 +43,12 @@ command or tool to agent threads, and the message reads like one you wrote.
   Enter saves, Shift+Enter starts a new line, Esc cancels. Click a comment
   shown under a line to edit it. A comment can go
   with any verdict ("Disagreed: 3 retries is enough") or stand alone.
-- **Send.** A bar above the message box counts what you marked. **Submit
-  replies** sends it at once, or queues it if the agent is still working.
+- **Check before sending.** A bar above the message box shows
+  **↑ Replies: N ↓**, the number of lines you marked. The arrows scroll the
+  chat to each marked line in turn and flash it, even when it has scrolled far
+  away: ↑ starts from the newest, ↓ from the oldest, and both wrap around.
+- **Send.** **Submit replies** sends your marks at once, or queues them if
+  the agent is still working.
   Anything you had already typed in the message box goes along, with the
   replies after it. **Clear** drops every mark in the thread.
 
@@ -67,7 +71,8 @@ are dropped.
 | `lib/lines.ts` | Splits a rendered reply into lines. |
 | `lib/marks.ts` | The marks store, shared by the content script and the bar, kept in localStorage. |
 | `lib/format.ts` | Builds the message sent to the agent. |
-| `lib/icons.ts` | The four toolbar icons, from [Tabler Icons](https://tabler.io/icons) (MIT). |
+| `lib/step.ts` | Which marked line the bar's ↑ / ↓ go to next. |
+| `lib/icons.ts` | The toolbar and bar icons, from [Tabler Icons](https://tabler.io/icons) (MIT). |
 | `app.tsx` | Registers the content script and the bar above the message box (a composer banner), which sends through BB's composer API. |
 | `app.css` | Styles, built from BB's theme variables. |
 | `server.ts` | Empty backend, required by BB. |
@@ -110,5 +115,5 @@ bb plugin install . # once; afterwards: bb plugin reload quick-reply
 
 ## License
 
-GPL-3.0. The toolbar icons are from [Tabler Icons](https://tabler.io/icons),
+GPL-3.0. The icons are from [Tabler Icons](https://tabler.io/icons),
 MIT License.

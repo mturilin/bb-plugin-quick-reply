@@ -51,6 +51,24 @@ div[data-lr-vote] {
   --lr-comment: oklch(0.62 0.19 290);
 }
 
+/* The line the bar's ↑ / ↓ just scrolled to: an outline that fades out
+   (content.ts removes the attribute after FLASH_MS, 1.6 s). */
+[data-lr-flash] {
+  animation: lr-flash 1.6s ease-out forwards;
+}
+
+@keyframes lr-flash {
+  0%,
+  45% {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  100% {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+}
+
 /* Clicking the comment opens it for editing (content.ts, onClick). */
 [data-lr-comment]::after {
   content: attr(data-lr-comment);
@@ -228,7 +246,7 @@ div[data-lr-vote] {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 12px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius, 0.5rem) + 4px);
   background: var(--card);
@@ -236,8 +254,19 @@ div[data-lr-vote] {
   font-size: 0.875rem;
 }
 
-.lr-bar-summary {
+.lr-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.lr-count {
+  padding: 0 4px;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.lr-spacer {
   flex: 1;
-  min-width: 0;
-  color: var(--muted-foreground);
 }

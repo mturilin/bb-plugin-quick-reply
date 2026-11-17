@@ -3,8 +3,8 @@
 // What: registers the two halves of Quick Reply.
 //   1. A content script (content.ts) that puts agree / disagree / tell-me-more /
 //      comment buttons on each line of agent replies.
-//   2. A bar above the thread's message box that counts the marks and sends
-//      them to the agent with "Submit replies".
+//   2. A bar above the thread's message box: "↑ Replies: N ↓", Clear, and
+//      "Submit replies", which sends the marks to the agent.
 // Why: reviewing long agent output line by line without copying text, and
 //   without the agent knowing a tool is involved: what it receives is an
 //   ordinary message from the user.
@@ -17,12 +17,18 @@
 //     restored to what it was and the marks are kept.
 //   - Marks are cleared only for the lines that were actually sent, so a mark
 //     added while sending survives.
+//   - The bar shows only how many lines are marked. ↑ / ↓ scroll the chat to
+//     each marked line in turn (content.ts, jumpToMark), so the user can check
+//     what they are sending once the lines have scrolled away. Which mark is
+//     current is deliberately not shown.
 
 import { useState, useSyncExternalStore } from "react";
 import { definePluginApp, useComposer } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
-import { mountLineControls } from "./content.ts";
+import { jumpToMark, mountLineControls, rowRanks } from "./content.ts";
 import { formatReplies, orderMarks } from "./lib/format.ts";
+import { iconPaths, type IconName } from "./lib/icons.ts";
+import type { Direction } from "./lib/step.ts";
 import { marksStore, type LineMark } from "./lib/marks.ts";
 import "./app.css";
 
@@ -43,26 +49,43 @@ function useThreadMarks(threadId: string | null): readonly LineMark[] {
 }
 
 /**
- * Position of each timeline row currently on the page, top to bottom, so the
- * sent message follows the conversation's order.
+ * One icon-only button of the bar (↑ / ↓), styled like the line toolbar's.
+ * `onPointerDown` keeps focus in the message box when it is clicked.
  */
-function rowRanks(): Map<string, number> {
-  const ranks = new Map<string, number>();
-  document.querySelectorAll<HTMLElement>("[data-timeline-row-id]").forEach((row, i) => {
-    const id = row.dataset.timelineRowId;
-    if (id !== undefined && !ranks.has(id)) ranks.set(id, i);
-  });
-  return ranks;
-}
-
-/** "1 line" / "3 lines". */
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
+function IconButton(props: { icon: IconName; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="lr-button"
+      title={props.label}
+      aria-label={props.label}
+      onPointerDown={(event) => event.preventDefault()}
+      onClick={props.onClick}
+    >
+      <svg
+        className="lr-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        {iconPaths(props.icon).map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </svg>
+    </button>
+  );
 }
 
 /**
  * The bar above a thread's message box. Renders nothing until the thread has
  * at least one marked line.
+ *
+ * Post-conditions (on ↑ / ↓): scrolls the chat to the previous / next marked
+ * line and flashes it; shows a toast when that line cannot be found.
  *
  * Post-conditions (on Submit replies): appends the formatted replies to the
  * message box, submits it, and on success removes the sent marks. On
@@ -75,18 +98,12 @@ function RepliesBar() {
   const [sending, setSending] = useState(false);
   if (threadId === null || marks.length === 0) return null;
 
-  const up = marks.filter((m) => m.vote === "up").length;
-  const down = marks.filter((m) => m.vote === "down").length;
-  const questions = marks.filter((m) => m.vote === "question").length;
-  const comments = marks.filter((m) => m.comment.trim() !== "").length;
-  const summary = [
-    up > 0 ? `${up} agreed` : null,
-    down > 0 ? `${down} disagreed` : null,
-    questions > 0 ? plural(questions, "question") : null,
-    comments > 0 ? plural(comments, "comment") : null,
-  ]
-    .filter((part) => part !== null)
-    .join(" · ");
+  const jump = async (direction: Direction) => {
+    const result = await jumpToMark(threadId, direction);
+    if (result === "missing") {
+      toast("Couldn't find that line in the chat. The reply may have changed since you marked it.");
+    }
+  };
 
   const submit = async () => {
     if (sending) return;
@@ -111,9 +128,12 @@ function RepliesBar() {
 
   return (
     <div className="lr-bar" role="region" aria-label="Line replies">
-      <span className="lr-bar-summary">
-        Replies on {plural(marks.length, "line")}: {summary}
+      <span className="lr-nav">
+        <IconButton icon="arrow-up" label="Previous marked line" onClick={() => void jump("previous")} />
+        <span className="lr-count">Replies: {marks.length}</span>
+        <IconButton icon="arrow-down" label="Next marked line" onClick={() => void jump("next")} />
       </span>
+      <span className="lr-spacer" />
       <button
         type="button"
         className="lr-text-button"

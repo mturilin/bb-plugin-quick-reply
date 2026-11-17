@@ -11,7 +11,7 @@ Give every point a decision while it is in front of you. Precise feedback means 
 - **Four line buttons:** agree, disagree, tell me more and comment.
 - **One click per line:** green, red or amber edges show what you have covered. Click another verdict to change it, or the same one to remove it.
 - **Optional comments:** explain a verdict or leave a comment on its own.
-- **One message back:** **Submit replies** sends all your marks together, or queues them while the agent is working. The bar counts your marks; **Clear** drops them.
+- **One message back:** **Submit replies** sends all your marks together, or queues them while the agent is working. The bar's ↑ / ↓ arrows scroll to each marked line so you can check what you are sending; **Clear** drops them.
 
 ## What the agent receives
 

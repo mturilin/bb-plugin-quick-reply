@@ -22,6 +22,12 @@
 //   - BB's timeline unloads rows far from the viewport and re-renders replies
 //     while they stream, so a MutationObserver re-scans (debounced). Marks
 //     are keyed by line text, not by element, and survive this.
+//   - The bar's ↑ / ↓ buttons call `jumpToMark`, which scrolls the chat to a
+//     marked line and flashes it once the scroll has stopped (a long smooth
+//     scroll outlasts the flash if both start together). A line in a row BB has unloaded is not on
+//     the page, so the chat is scrolled a screen at a time (up first, then
+//     down) until BB loads it; if it never appears, the scroll position is
+//     put back and the caller is told it is missing.
 // Gotchas:
 //   - The observer watches child and text changes only, never attributes, so
 //     painting does not re-trigger it. Changes inside our own layer are
@@ -29,9 +35,11 @@
 //   - Everything created here is removed when the signal aborts (plugin
 //     reload, disable, or BB shutdown).
 
+import { orderMarks } from "./lib/format.ts";
 import { createIcon, type IconName } from "./lib/icons.ts";
 import { extractUnits, occurrences } from "./lib/lines.ts";
 import { marksStore, sameLine, STORAGE_KEY, type LineRef, type Vote } from "./lib/marks.ts";
+import { stepTarget, type Direction } from "./lib/step.ts";
 
 const ROW_SELECTOR = "[data-timeline-row-id]";
 const MARKDOWN_SELECTOR = "[data-markdown-preview]";
@@ -40,8 +48,56 @@ const UNIT_ATTR = "data-lr-unit";
 const VOTE_ATTR = "data-lr-vote";
 const COMMENT_ATTR = "data-lr-comment";
 const HOVER_ATTR = "data-lr-hover";
+const FLASH_ATTR = "data-lr-flash";
 const RESCAN_DELAY_MS = 120;
 const HIDE_DELAY_MS = 250;
+/** How long a line jumped to stays outlined; app.css fades it over this time. */
+const FLASH_MS = 1600;
+/** Wait after each search scroll for BB to load rows and our scan to run. */
+const SEARCH_SETTLE_MS = 250;
+/** Screens scrolled in each direction before a line counts as missing. */
+const SEARCH_MAX_STEPS = 40;
+/** Animation frames a line must stay put before it counts as arrived. */
+const STILL_FRAMES = 6;
+/** Flash anyway after this long, if the chat never settles (e.g. streaming). */
+const SETTLE_MAX_MS = 3000;
+
+/**
+ * What a press of ↑ / ↓ did: scrolled to a line ("shown"), could not find it
+ * ("missing"), found no marks ("none"), or was overtaken by a newer press
+ * ("cancelled").
+ */
+export type JumpResult = "shown" | "missing" | "none" | "cancelled";
+
+/** Set while the content script is mounted; see jumpToMark. */
+let jumper: ((threadId: string, direction: Direction) => Promise<JumpResult>) | null = null;
+
+/**
+ * Scroll the chat to the previous or next marked line of a thread and flash
+ * it. Used by the bar's ↑ / ↓ buttons.
+ *
+ * Returns what happened; "none" also when the content script is not running.
+ * Post-conditions: may scroll BB's chat; once the scroll stops, outlines the
+ *   line for FLASH_MS. Resolves after the outline has started.
+ */
+export function jumpToMark(threadId: string, direction: Direction): Promise<JumpResult> {
+  return jumper === null ? Promise.resolve("none") : jumper(threadId, direction);
+}
+
+/**
+ * Position of each timeline row currently on the page, top to bottom, so marks
+ * can be put in conversation order (see orderMarks).
+ */
+export function rowRanks(): Map<string, number> {
+  const ranks = new Map<string, number>();
+  document.querySelectorAll<HTMLElement>(ROW_SELECTOR).forEach((row, i) => {
+    const id = row.dataset.timelineRowId;
+    if (id !== undefined && !ranks.has(id)) ranks.set(id, i);
+  });
+  return ranks;
+}
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** What a decorated line element stands for. */
 interface Binding {
@@ -132,6 +188,12 @@ export function mountLineControls(signal: AbortSignal): () => void {
   let editing: { el: HTMLElement; binding: Binding } | null = null;
   let rescanTimer: ReturnType<typeof setTimeout> | null = null;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
+  // The mark each thread's last ↑ / ↓ press went to, and the press counter
+  // that lets a newer press cancel a search still running.
+  const lastJumped = new Map<string, LineRef>();
+  let jumpGeneration = 0;
+  let flashed: HTMLElement | null = null;
+  let flashTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ---- floating layer ---------------------------------------------------
   const layer = document.createElement("div");
@@ -356,6 +418,126 @@ export function mountLineControls(signal: AbortSignal): () => void {
     store.update(binding.threadId, binding.ref, { vote: current === value ? null : value });
   }
 
+  // ---- jumping to marked lines (the bar's ↑ / ↓) ---------------------------
+
+  /** Run a pending re-scan now, so `findLine` sees the current page. */
+  function flushScan() {
+    if (rescanTimer !== null) clearTimeout(rescanTimer);
+    scan();
+  }
+
+  /**
+   * Outline `el` briefly. Re-adding the attribute after a forced layout
+   * restarts the CSS animation when the same line is flashed twice in a row.
+   */
+  function flash(el: HTMLElement) {
+    if (flashed !== null) flashed.removeAttribute(FLASH_ATTR);
+    if (flashTimer !== null) clearTimeout(flashTimer);
+    void el.offsetWidth;
+    el.setAttribute(FLASH_ATTR, "");
+    flashed = el;
+    flashTimer = setTimeout(() => {
+      el.removeAttribute(FLASH_ATTR);
+      if (flashed === el) flashed = null;
+      flashTimer = null;
+    }, FLASH_MS);
+  }
+
+  /**
+   * Wait until `el` stops moving on screen, i.e. the smooth scroll toward it
+   * has finished.
+   *
+   * Watches the line's position frame by frame instead of waiting for a
+   * "scroll finished" event: when the line is already where it should be, no
+   * scroll happens and no such event would come. A line already in place
+   * resolves after STILL_FRAMES frames (about 100 ms).
+   *
+   * Returns true when it settled or SETTLE_MAX_MS passed; false when a newer
+   * press took over (its own flash replaces this one).
+   */
+  function waitUntilStill(el: HTMLElement, generation: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const deadline = performance.now() + SETTLE_MAX_MS;
+      let lastTop = el.getBoundingClientRect().top;
+      let still = 0;
+      const tick = () => {
+        if (generation !== jumpGeneration) return resolve(false);
+        const top = el.getBoundingClientRect().top;
+        still = Math.abs(top - lastTop) < 0.5 ? still + 1 : 0;
+        lastTop = top;
+        if (still >= STILL_FRAMES || performance.now() > deadline) return resolve(true);
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  /** True when the timeline row `rowId` is on the page. */
+  function rowLoaded(rowId: string): boolean {
+    return document.querySelector(`${ROW_SELECTOR}[data-timeline-row-id="${CSS.escape(rowId)}"]`) !== null;
+  }
+
+  /** The scroll area holding a thread's timeline, or null if none is shown. */
+  function chatViewport(threadId: string): HTMLElement | null {
+    const row = document.querySelector(`${ROW_SELECTOR}[data-timeline-row-id^="${CSS.escape(threadId)}:"]`);
+    return row?.closest<HTMLElement>(VIEWPORT_SELECTOR) ?? document.querySelector<HTMLElement>(VIEWPORT_SELECTOR);
+  }
+
+  /**
+   * Scroll the chat a screen at a time until BB loads the row holding
+   * `target`: upward first (unloaded rows are usually older), then downward.
+   *
+   * Returns the line element, or null when it never appears, when its row is
+   * on the page but the line is not (the reply changed), or when a newer
+   * press took over. When the line is not found, the chat is scrolled back to
+   * where it was.
+   */
+  async function bringIntoPage(threadId: string, target: LineRef, generation: number): Promise<HTMLElement | null> {
+    if (rowLoaded(target.rowId)) return null;
+    const viewport = chatViewport(threadId);
+    if (viewport === null) return null;
+    const start = viewport.scrollTop;
+    for (const step of [-1, 1]) {
+      for (let i = 0; i < SEARCH_MAX_STEPS; i++) {
+        const before = viewport.scrollTop;
+        const heightBefore = viewport.scrollHeight;
+        viewport.scrollTo({ top: before + step * viewport.clientHeight * 0.9, behavior: "instant" });
+        await wait(SEARCH_SETTLE_MS);
+        if (generation !== jumpGeneration) return null;
+        flushScan();
+        const el = findLine(threadId, target);
+        if (el !== null) return el;
+        if (rowLoaded(target.rowId)) break;
+        // At an end and nothing new loaded: try the other direction.
+        if (Math.abs(viewport.scrollTop - before) < 1 && viewport.scrollHeight === heightBefore) break;
+      }
+      if (rowLoaded(target.rowId)) break;
+    }
+    if (generation === jumpGeneration) viewport.scrollTo({ top: start, behavior: "instant" });
+    return null;
+  }
+
+  /** The implementation behind `jumpToMark`. */
+  async function jumpTo(threadId: string, direction: Direction): Promise<JumpResult> {
+    const generation = ++jumpGeneration;
+    flushScan();
+    const ordered = orderMarks(store.forThread(threadId), rowRanks());
+    const target = stepTarget(ordered, lastJumped.get(threadId), direction);
+    if (target === undefined) return "none";
+    lastJumped.set(threadId, target);
+    const el = findLine(threadId, target) ?? (await bringIntoPage(threadId, target, generation));
+    if (generation !== jumpGeneration) return "cancelled";
+    if (el === null) return "missing";
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (!(await waitUntilStill(el, generation))) return "cancelled";
+    // BB may have re-rendered the reply while it scrolled; flash the line's
+    // current element.
+    flash(el.isConnected ? el : (findLine(threadId, target) ?? el));
+    return "shown";
+  }
+
+  jumper = jumpTo;
+
   // ---- comment editor ------------------------------------------------------
 
   function openEditor(el: HTMLElement) {
@@ -511,6 +693,10 @@ export function mountLineControls(signal: AbortSignal): () => void {
     window.removeEventListener("storage", onStorage);
     if (rescanTimer !== null) clearTimeout(rescanTimer);
     cancelHide();
+    if (jumper === jumpTo) jumper = null;
+    jumpGeneration++; // stops a search still running
+    if (flashTimer !== null) clearTimeout(flashTimer);
+    flashed?.removeAttribute(FLASH_ATTR);
     for (const el of decorated) unpaint(el);
     decorated.clear();
     layer.remove();
