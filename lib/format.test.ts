@@ -1,11 +1,11 @@
 // Tests for lib/format.ts: the message the agent receives.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatReplies, orderMarks, QUOTE_LIMIT, quote, verdict } from "./format.ts";
+import { formatReplies, orderMarks, QUOTE_LIMIT, quote, verdict, withReplies } from "./format.ts";
 import type { LineMark } from "./marks.ts";
 
 const mark = (over: Partial<LineMark>): LineMark => ({
-  rowId: "r1", text: "t", occurrence: 0, index: 0, vote: null, comment: "", updatedAt: 0, ...over,
+  rowId: "r1", text: "t", occurrence: 0, index: 0, vote: null, comment: "", attachments: [], updatedAt: 0, ...over,
 });
 
 test("formats quotes with the verdict underneath, in words", () => {
@@ -26,6 +26,31 @@ test("formats quotes with the verdict underneath, in words", () => {
     ].join("\n\n"),
   );
   assert.doesNotMatch(text, /[👍👎❓💬]/u);
+});
+
+test("attached files are named under the quote", () => {
+  const png = { type: "localImage", path: "a-17-x1.png", name: "a.png" } as const;
+  const pdf = { type: "localFile", path: "-17-x2.pdf", name: "отчёт.pdf" } as const;
+  assert.equal(
+    formatReplies([
+      mark({ text: "with comment", comment: "look", attachments: [png, pdf] }),
+      mark({ text: "with verdict", vote: "up", attachments: [png], index: 1 }),
+      mark({ text: "files only", attachments: [pdf], index: 2 }),
+    ]),
+    [
+      "My replies, line by line:",
+      "> with comment\nComment: look\nAttached: a.png (a-17-x1.png), отчёт.pdf (-17-x2.pdf)",
+      "> with verdict\nAgreed.\nAttached: a.png (a-17-x1.png)",
+      "> files only\nAttached: отчёт.pdf (-17-x2.pdf)",
+    ].join("\n\n"),
+  );
+});
+
+test("the general note goes after the replies, below a Markdown rule", () => {
+  assert.equal(withReplies("", "replies"), "replies");
+  assert.equal(withReplies("  \n", "replies"), "replies");
+  assert.equal(withReplies("typed\n", "replies"), "replies\n\n---\n\ntyped");
+  assert.equal(withReplies("    code", "replies"), "replies\n\n---\n\n    code");
 });
 
 test("nothing marked means nothing to send", () => {

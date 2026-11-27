@@ -9,8 +9,8 @@ work. Replying "looks good" saves typing, but leaves the agent guessing which
 details you actually approved.
 
 Quick Reply puts the buttons on the reply. Hover a line, click agree,
-disagree or "tell me more", move to the next one. Press **Submit replies**
-when you're done. Nothing to type unless you want to add a comment.
+disagree or "tell me more", move to the next one. Press **Submit replies**,
+click BB's send arrow, or press **Enter** in the composer when you're done.
 
 The agent gets one ordinary message from you, each line you clicked quoted
 with your verdict under it in plain words:
@@ -43,14 +43,15 @@ command or tool to agent threads, and the message reads like one you wrote.
   Enter saves, Shift+Enter starts a new line, Esc cancels. Click a comment
   shown under a line to edit it. A comment can go
   with any verdict ("Disagreed: 3 retries is enough") or stand alone.
-- **Check before sending.** A bar above the message box shows
-  **↑ Replies: N ↓**, the number of lines you marked. The arrows scroll the
-  chat to each marked line in turn and flash it, even when it has scrolled far
-  away: ↑ starts from the newest, ↓ from the oldest, and both wrap around.
-- **Send.** **Submit replies** sends your marks at once, or queues them if
-  the agent is still working.
-  Anything you had already typed in the message box goes along, with the
-  replies after it. **Clear** drops every mark in the thread.
+- **Attach files to a comment.** Paste a screenshot, drop files on the box, or
+  use the paperclip. Files upload right away and show under the text, with a
+  thumbnail for images. A comment can be files alone. The files go out as
+  ordinary message attachments and are named below their quote.
+- **Send.** The bar counts the marks, and its **↑ / ↓** buttons jump between
+  them. **Submit replies**, the desktop send arrow, and **Enter** in the composer
+  send the marks in conversation order, followed by your general note below a
+  horizontal rule. BB applies its usual send or queue behavior. With an empty
+  composer, use **Submit replies** or **Enter**. **Clear** drops all marks in the thread.
 
 ![A reviewed reply: one line marked agreed in green, one disagreed in red, a comment under another, and the Submit replies bar above the message box](assets/screenshots/marked-reply.png)
 
@@ -71,8 +72,9 @@ are dropped.
 | `lib/lines.ts` | Splits a rendered reply into lines. |
 | `lib/marks.ts` | The marks store, shared by the content script and the bar, kept in localStorage. |
 | `lib/format.ts` | Builds the message sent to the agent. |
-| `lib/step.ts` | Which marked line the bar's ↑ / ↓ go to next. |
-| `lib/icons.ts` | The toolbar and bar icons, from [Tabler Icons](https://tabler.io/icons) (MIT). |
+| `lib/send.ts` | Routes the main send controls to the combined draft and submits it through the BB SDK. |
+| `lib/attachments.ts` | Uploads files on comments through the BB SDK and reads them back for thumbnails. |
+| `lib/icons.ts` | The plugin's icons, from [Tabler Icons](https://tabler.io/icons) (MIT). |
 | `app.tsx` | Registers the content script and the bar above the message box (a composer banner), which sends through BB's composer API. |
 | `app.css` | Styles, built from BB's theme variables. |
 | `server.ts` | Empty backend, required by BB. |
@@ -87,9 +89,9 @@ the chat page directly. It relies on three things observed on bb 0.46:
 - a reply's Markdown is inside `[data-markdown-preview]`;
 - the chat scroll area is `[data-page-scroll-viewport]`.
 
-If a BB update changes these, the controls stop appearing. Nothing else
-breaks, and saved marks are kept. Sending uses BB's official composer API and
-is not affected.
+The desktop send shortcut also uses BB's composer markup, including the send
+button and editor attributes. The **Submit replies** button submits through
+the BB composer API and remains available if those attributes change.
 
 ## Install
 
@@ -101,7 +103,9 @@ bb plugin install git:https://github.com/mturilin/bb-plugin-quick-reply.git
 
 Requires BB 0.46 or later. Nothing else to install, no account, no external
 service: marks stay in your BB window until you send them, and the only thing
-that leaves is the message you send to your own agent.
+that leaves is the message you send to your own agent. Files on comments are
+stored by your BB, in the project's attachments. BB's plugin API cannot delete
+them, so a file removed before sending stays there unused.
 
 ## Development
 
@@ -115,5 +119,5 @@ bb plugin install . # once; afterwards: bb plugin reload quick-reply
 
 ## License
 
-GPL-3.0. The icons are from [Tabler Icons](https://tabler.io/icons),
+GPL-3.0. The toolbar icons are from [Tabler Icons](https://tabler.io/icons),
 MIT License.

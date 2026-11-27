@@ -19,6 +19,30 @@ test("a vote creates a mark and pressing it off removes the mark", () => {
   assert.equal(store.forThread("thr_a").length, 0);
 });
 
+test("a line with only files attached keeps its mark until they are removed", () => {
+  const store = createMarksStore(null, () => 1);
+  const file = { type: "localFile", path: "Attachments/a.txt", name: "a.txt" } as const;
+  store.update("thr_a", line("Add a cache"), { attachments: [file] });
+  assert.deepEqual(store.find("thr_a", line("Add a cache"))?.attachments, [file]);
+  store.update("thr_a", line("Add a cache"), { vote: "up" });
+  assert.deepEqual(store.find("thr_a", line("Add a cache"))?.attachments, [file]);
+  store.update("thr_a", line("Add a cache"), { vote: null, attachments: [] });
+  assert.equal(store.forThread("thr_a").length, 0);
+});
+
+test("stored attachments are checked, and marks from before them still load", () => {
+  const old = { rowId: "r", text: "t", occurrence: 0, index: 0, vote: "up", comment: "", updatedAt: 1 };
+  const good = { type: "localImage", path: "Attachments/a.png", name: "a.png", sizeBytes: 5 };
+  const bad = [{ type: "exe", path: "x", name: "x" }, { type: "localFile", path: "", name: "x" }, 7, null];
+  const state = parseState(
+    JSON.stringify({ thr_a: [old], thr_b: [{ ...old, attachments: [good, ...bad, ] }], thr_c: [{ ...old, attachments: "no" }] }),
+    1,
+  );
+  assert.deepEqual(state.get("thr_a")?.[0]?.attachments, []);
+  assert.deepEqual(state.get("thr_b")?.[0]?.attachments, [good]);
+  assert.deepEqual(state.get("thr_c")?.[0]?.attachments, []);
+});
+
 test("a question replaces an earlier vote on the same line", () => {
   const store = createMarksStore(null, () => 1);
   store.update("thr_a", line("Add a cache"), { vote: "up" });
