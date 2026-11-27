@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-quick-reply",
-  "version": "0.2.3",
+  "version": "0.3.3",
   "type": "module",
   "engines": {
     "bb": ">=0.46",
@@ -29,6 +29,13 @@
     "typescript": "^5.7.0"
   },
   "description": "Give your agent quick feedback by clicking on which lines you agree and disagree with. Ask for more detail on any line, or add a comment when a click isn't enough.",
+  "bbMarketplace": {
+    "category": "thread-content",
+    "screenshots": [
+      "./assets/screenshots/line-buttons.png",
+      "./assets/screenshots/marked-reply.png"
+    ]
+  },
   "scripts": {
     "test": "node --test lib/*.test.ts",
     "typecheck": "tsc --noEmit -p .",
